@@ -1,0 +1,1 @@
+	dali	KEYWORD1	setTxPin	KEYWORD2	setRxAnalogPin	KEYWORD2	workAround1MhzTinyCore	KEYWORD2	setupTransmit	KEYWORD2	setupAnalogReceive	KEYWORD2	transmit	KEYWORD2	scanShortAdd	KEYWORD2	busTest	KEYWORD2	initialisation	KEYWORD2	cmdCheck	KEYWORD2	minResponseLevel	KEYWORD2	maxResponseLevel	KEYWORD2
