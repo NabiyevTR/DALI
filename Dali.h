@@ -69,6 +69,7 @@ class Dali
 	void busTest(); // bus test
 	void initialisation(); //initialization of new luminaries
 	bool cmdCheck(String & input, int & cmd1, int & cmd2);
+	uint8_t receive(); //get response
 
 	int minResponseLevel(); 
 	int maxResponseLevel();
@@ -76,6 +77,11 @@ class Dali
     uint8_t speedFactor;
     uint16_t delay1;
     uint16_t delay2;
+	uint16_t period;
+	String errorMsg; //error message of last operation
+	bool msgMode; //0 - get only response from dali bus to COM; 1 - response with text (comments)
+	bool getResponse;
+	uint8_t RxAnalogPin;
 
 	long daliTimeout = 20000; //us, DALI response timeout
 	int analogLevel = 870; //analog border level (less - "0"; more - "1")
@@ -95,7 +101,7 @@ class Dali
 	int readBinaryString(char *s);
 
 	uint8_t TxPin;
-	uint8_t RxAnalogPin;
+	
     uint8_t applyWorkAround1Mhz;
 	uint8_t rxAnalogPin = 0;
 
