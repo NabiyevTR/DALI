@@ -1,4 +1,5 @@
 
+
 #include "Dali.h"
 #include <SoftwareSerial.h>
 
@@ -54,6 +55,7 @@ void Dali::setupTransmit(uint8_t pin)
 #else
   delay1 = (HALF_BIT_INTERVAL >> speedFactor) - compensationFactor;
   delay2 = (HALF_BIT_INTERVAL >> speedFactor) - 2;
+  period = delay1 + delay2;
   
   #if F_CPU == 1000000UL
     delay2 -= 22; //22+2 = 24 is divisible by 8
@@ -186,7 +188,7 @@ int Dali::maxResponseLevel()
 
 	
 	for (idalistep = 0; idalistep < dali.daliTimeout; idalistep = idalistep + dalistep) {
-		dalidata = analogRead(RxAnalogPin);
+		dalidata = analogRead(dali.RxAnalogPin);
 		if (dalidata > rxmax) {
 			rxmax = dalidata;
 		};
@@ -205,44 +207,65 @@ void Dali::scanShortAdd()
 	const uint8_t finish_ind_adress = 127;
 	uint8_t add_byte;
 	uint8_t device_short_add;
-	String response;
+	uint8_t response;
 		
 	dali.transmit(BROADCAST_C, OFF_C); // Broadcast Off
 	delay(delayTime);
-	Serial.println("Short addresses:");
+	
+	if (dali.msgMode) {
+		Serial.println("Short addresses:");
+	}
 
 	for (device_short_add = start_ind_adress; device_short_add <= 63; device_short_add++) {
 
 		add_byte = 1 + (device_short_add << 1); // convert short address to address byte
-
 		
-		dali.transmit(add_byte, QUERY_STATUS); //query status
-
+		
+		dali.transmit(add_byte, 0xA1);
+		
+		response = dali.receive();
+		
+		if (dali.getResponse) {
 			
-		if (minResponseLevel() < dali.analogLevel) {
-			response = "YES";
 			dali.transmit(add_byte, ON_C); // switch on
 			delay(1000);
 			dali.transmit(add_byte, OFF_C); // switch off
 			delay(1000);
+
 		}
 		else {
-			response = "NO";
+			response = 0;
 		}
 
 		
-		Serial.print("BIN: ");
-		Serial.print(device_short_add, BIN);
-		Serial.print(" ");
-		Serial.print("DEC: ");
-		Serial.print(device_short_add, DEC);
-		Serial.print(" ");
-		Serial.print("HEX: ");
-		Serial.print(device_short_add, HEX);
-		Serial.print(" ");
-		Serial.print("Response: ");
-		Serial.print(response);
-		Serial.println();
+		
+		if (dali.msgMode) {
+			Serial.print("BIN: ");
+			Serial.print(device_short_add, BIN);
+			Serial.print(" ");
+			Serial.print("DEC: ");
+			Serial.print(device_short_add, DEC);
+			Serial.print(" ");
+			Serial.print("HEX: ");
+			Serial.print(device_short_add, HEX);
+			Serial.print(" ");
+			if (dali.getResponse) {
+				Serial.print("Get response");
+			}
+			else {
+				Serial.print("No response");
+			}
+			Serial.println();
+		}
+		else {
+			if (dali.getResponse) {
+				Serial.println(255, BIN);
+			}
+			else {
+				Serial.println(0, BIN);
+			}
+			
+		}
 
 	}
 
@@ -303,7 +326,6 @@ void Dali::initialisation() {
 	uint8_t short_add = 0;
 	uint8_t cmd2;
 
-	
 	delay(delaytime);
 	dali.transmit(BROADCAST_C, RESET);
 	delay(delaytime);
@@ -319,7 +341,9 @@ void Dali::initialisation() {
 	delay(delaytime);
 	dali.transmit(0b10100111, 0b00000000); //randomise
 
-	Serial.println("Searching fo long addresses:");
+	if (dali.msgMode) {
+		Serial.println("Searching fo long addresses:");
+	}
 
 	while (longadd <= 0xFFFFFF - 2 and short_add <= 64) {
 		while ((high_longadd - low_longadd) > 1) {
@@ -345,15 +369,20 @@ void Dali::initialisation() {
 			
 			longadd = (low_longadd + high_longadd) / 2; //center
 
-			Serial.print("BIN: ");
-			Serial.print(longadd + 1, BIN);
-			Serial.print(" ");
-			Serial.print("DEC: ");
-			Serial.print(longadd + 1, DEC);
-			Serial.print(" ");
-			Serial.print("HEX: ");
-			Serial.print(longadd + 1, HEX);
-			Serial.println();
+			if (dali.msgMode) {
+				Serial.print("BIN: ");
+				Serial.print(longadd + 1, BIN);
+				Serial.print(" ");
+				Serial.print("DEC: ");
+				Serial.print(longadd + 1, DEC);
+				Serial.print(" ");
+				Serial.print("HEX: ");
+				Serial.print(longadd + 1, HEX);
+				Serial.println();
+			}
+			else {
+				Serial.println(longadd + 1);
+			}
 		} // second while
 
 
@@ -376,14 +405,18 @@ void Dali::initialisation() {
 			delay(delaytime);
 			short_add++;
 
+			if (dali.msgMode) {	
 			Serial.println("Assigning a short address");
+			}
 
 			high_longadd = 0xFFFFFF;
 			longadd = (low_longadd + high_longadd) / 2;
 
 		}
 		else {
-			Serial.println("End");
+			if (dali.msgMode) { 
+				Serial.println("End"); 
+			}
 		}
 	} // first while
 
@@ -393,6 +426,84 @@ void Dali::initialisation() {
 }
 
 
+uint8_t Dali::receive() {
+
+
+	
+	unsigned long startFuncTime = 0;
+	bool previousLogicLevel = 1;
+	bool currentLogicLevel = 1;
+	uint8_t arrLength = 20;
+	int  timeArray[arrLength];
+	int i = 0;
+	int k = 0;
+	bool logicLevelArray[arrLength];
+	int response = 0;
+
+	dali.getResponse = false;
+	startFuncTime = micros();
+	
+	// add check for micros overlap here!!!
+
+	while (micros() - startFuncTime < dali.daliTimeout and i < arrLength)
+	{
+		// geting response
+		if (analogRead(dali.RxAnalogPin) > dali.analogLevel) {
+			currentLogicLevel = 1;
+		}
+		else {
+			currentLogicLevel = 0;
+		}
+
+		if (previousLogicLevel != currentLogicLevel) {
+			timeArray[i] = micros() - startFuncTime;
+			logicLevelArray[i] = currentLogicLevel;
+			previousLogicLevel = currentLogicLevel;
+			dali.getResponse = true;
+			i++;
+
+		}
+	}
+
+		
+	
+	arrLength = i;
+
+	//decoding to manchester
+	for (i = 0; i < arrLength - 1; i++) {
+		if ((timeArray[i + 1] - timeArray[i]) > 0.75 * dali.period) {
+			for (k = arrLength; k > i; k--) {
+				timeArray[k] = timeArray[k - 1];
+				logicLevelArray[k] = logicLevelArray[k - 1];
+			}
+			arrLength++;
+			timeArray[i + 1] = (timeArray[i] + timeArray[i + 2]) / 2;
+			logicLevelArray[i + 1] = logicLevelArray[i];
+		}
+	}
+
+
+
+
+
+	k = 8;
+
+	for (i = 1; i < arrLength; i++) {
+		if (logicLevelArray[i] == 1) {
+			if ((int)round((timeArray[i] - timeArray[0]) / (0.5 * dali.period)) & 1) {
+				response = response + (1 << k);
+			}
+			k--;
+		}
+	}
+
+	
+	//remove start bit
+	response = (uint8_t)response;
+	
+	return response;
+
+}
 
 
 
