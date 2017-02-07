@@ -17,10 +17,12 @@ const int DALI_RX_A = 0;
 
 void setup() {
 
-  Serial.begin(74880); 
+  Serial.begin(74880);
   dali.setupTransmit(DALI_TX);
   dali.setupAnalogReceive(DALI_RX_A);
   dali.busTest();
+  dali.msgMode = true;
+  Serial.println(dali.analogLevel);
   help(); //Show help
 
 }
@@ -47,8 +49,14 @@ void sinus () {
   int i;
   int j = 0;
 
-  while (j != 1) {
+  while (Serial.available() == 0) {
     for (i = 0; i < 360; i = i + 1) {
+
+      if (Serial.available() != 0) {
+        dali.transmit(BROADCAST_C, ON_C);
+        break;
+      }
+
       lf_1 = (int) abs(254 * sin(i * 3.14 / 180));
       lf_2 = (int) abs(254 * sin(i * 3.14 / 180 + 2 * 3.14 / 3));
       lf_3 = (int) abs(254 * sin(i * 3.14 / 180 + 1 * 3.14 / 3));
@@ -62,6 +70,35 @@ void sinus () {
     }
   }
 }
+
+
+
+void testReceive () {
+
+
+
+  dali.transmit(0, 254);
+  delay(200);
+  dali.transmit(1, 0x90);
+  Serial.println(dali.receive());
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void loop() {
 
@@ -104,9 +141,15 @@ void loop() {
     help();
   }; //help
 
-if (dali.cmdCheck(comMsg, cmd1, cmd2)) {
-  dali.transmit(cmd1, cmd2);  // command in binary format: (address byte, command byte)
-}
+  if (comMsg == "test") {
+    testReceive();
+  }; //graph
+
+
+
+  if (dali.cmdCheck(comMsg, cmd1, cmd2)) {
+    dali.transmit(cmd1, cmd2);  // command in binary format: (address byte, command byte)
+  }
   delay(delaytime);
 
 };
